@@ -54,4 +54,4 @@ pub use config::{IkConfig, IkMode};
 pub use dict::{Dict, DictHit, DictKind};
 pub use lexeme::{Lexeme, LexemeKind};
 pub use rules::Rules;
-pub use tokenizer::IkTokenizer;
+pub use tokenizer::{IkTokenizer, TokenRange};
