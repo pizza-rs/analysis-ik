@@ -31,6 +31,31 @@ pub fn classify(c: char) -> CharKind {
     }
 }
 
+/// Fused regularize + classify with a fast path for the **CJK Unified
+/// Ideographs** block (U+4E00..=U+9FFF). Real Chinese text is dominated by
+/// codepoints in this range, all of which are invariant under `regularize`
+/// (the full-width / ideographic-space / ASCII-case rewrites only fire
+/// outside this block) and trivially classify as [`CharKind::Chinese`].
+///
+/// On the hot `CharStream::new` loop this collapses ~6 conditional range
+/// checks into a single compare-and-branch for the common case, eliminating
+/// the redundant work of calling `regularize` (3 checks) followed by
+/// `classify` (4 checks) on every CJK character.
+///
+/// Returns `(regularized_char, kind)`. The caller can detect whether the
+/// input was rewritten by comparing the returned char with the input — for
+/// the CJK fast path this is trivially false and dead-code-eliminated.
+#[inline]
+pub fn regularize_and_classify(c: char, lowercase: bool) -> (char, CharKind) {
+    let cp = c as u32;
+    if cp >= 0x4E00 && cp <= 0x9FFF {
+        // CJK Unified Ideographs: identity under regularize, always Chinese.
+        return (c, CharKind::Chinese);
+    }
+    let r = regularize(c, lowercase);
+    (r, classify(r))
+}
+
 #[inline]
 fn is_cjk_ideograph(c: char) -> bool {
     let cp = c as u32;

@@ -2,7 +2,7 @@
 //! `org.wltea.analyzer.core.CJKSegmenter`, `LetterSegmenter`, and
 //! `CN_QuantifierSegmenter`.
 
-use crate::char_util::{classify, is_chinese_number, regularize, CharKind};
+use crate::char_util::{is_chinese_number, regularize_and_classify, CharKind};
 use crate::dict::{for_each_prefix_in, main_trie, quantifier_view};
 use crate::lexeme::{Lexeme, LexemeKind};
 use crate::rules::Rules;
@@ -24,8 +24,10 @@ pub(crate) struct CharStream<'a> {
 
 impl<'a> CharStream<'a> {
     /// Build the stream in a single pass, fusing regularization, byte-offset
-    /// recording, and char-kind classification. Avoids the intermediate
-    /// `Vec<(char, usize)>` that the previous two-pass version allocated.
+    /// recording, and char-kind classification via [`regularize_and_classify`],
+    /// which short-circuits the common CJK Unified Ideograph case in one
+    /// compare-and-branch. Avoids the intermediate `Vec<(char, usize)>` that
+    /// the previous two-pass version allocated.
     pub fn new(text: &'a str, lowercase: bool) -> Self {
         // Heuristic capacity. Pure-CJK input has ~3 bytes/char; ASCII has 1.
         let cap = text.len() / 2 + 1;
@@ -34,13 +36,11 @@ impl<'a> CharStream<'a> {
         let mut kinds = Vec::with_capacity(cap);
         let mut any_regularized = false;
         for (off, c) in text.char_indices() {
-            let r = regularize(c, lowercase);
-            if r != c {
-                any_regularized = true;
-            }
+            let (r, kind) = regularize_and_classify(c, lowercase);
+            any_regularized |= r != c;
             chars.push(r);
             byte_off.push(off);
-            kinds.push(classify(r));
+            kinds.push(kind);
         }
         byte_off.push(text.len());
         Self {
