@@ -278,6 +278,7 @@ impl IkTokenizer {
             // when empty), then the optional forced singleton.
             if matches!(kinds[p], CharKind::Chinese) {
                 let byte_start = byte_off[p];
+                let mut had_len1 = false;
                 trie.find_prefixes_chars(&chars[p..], |char_count| {
                     // Only materialize the term slice when we actually need
                     // it for the removed-words check — saves a bounds-
@@ -294,18 +295,20 @@ impl IkTokenizer {
                         }
                     }
                     let kind = if char_count == 1 {
+                        had_len1 = true;
                         LexemeKind::CnChar
                     } else {
                         LexemeKind::CnWord
                     };
-                    push_unique(
-                        &mut bucket,
-                        Lexeme {
-                            begin: p,
-                            length: char_count,
-                            kind,
-                        },
-                    );
+                    // Direct push — trie hits are unique by construction
+                    // (increasing char_count at same begin). Dedup is only
+                    // needed for extras/singleton that may collide with
+                    // trie hits.
+                    bucket.push(Lexeme {
+                        begin: p,
+                        length: char_count,
+                        kind,
+                    });
                 });
                 if has_extras {
                     // SAFETY: same as above — byte_start is a codepoint
@@ -333,15 +336,16 @@ impl IkTokenizer {
                         );
                     });
                 }
-                if ensure_subset {
-                    push_unique(
-                        &mut bucket,
-                        Lexeme {
-                            begin: p,
-                            length: 1,
-                            kind: LexemeKind::CnChar,
-                        },
-                    );
+                if ensure_subset && !had_len1 {
+                    // Only push the singleton if the trie didn't already
+                    // emit a length-1 hit (which is the common case for
+                    // chars in the main dict). Avoids a linear scan of
+                    // the bucket.
+                    bucket.push(Lexeme {
+                        begin: p,
+                        length: 1,
+                        kind: LexemeKind::CnChar,
+                    });
                 }
             }
 
@@ -369,6 +373,10 @@ impl IkTokenizer {
                 // this whole block is dead-code-eliminated.
                 let term_opt: Option<Cow<'a, str>> = if needs_term {
                     Some(if !needs_reg_check {
+                        Cow::Borrowed(&text[bs..be])
+                    } else if matches!(lex.kind, LexemeKind::CnChar | LexemeKind::CnWord) {
+                        // CJK ideographs are identity under regularize —
+                        // skip the per-char comparison and borrow directly.
                         Cow::Borrowed(&text[bs..be])
                     } else {
                         let reg_slice = &chars[lex.begin..lex.begin + lex.length];
@@ -426,9 +434,8 @@ impl IkTokenizer {
         quantifier_segment(stream, &mut lexemes);
 
         let mut final_lexemes = arbitrate(lexemes, total);
-        fuse_quantifiers(&mut final_lexemes);
-        add_uncovered_chars(&mut final_lexemes, &stream.kinds);
-        ensure_isolated_alnum(&mut final_lexemes, &stream.kinds);
+        fuse_quantifiers_inplace(&mut final_lexemes);
+        add_all_uncovered(&mut final_lexemes, &stream.kinds);
         bucket_sort_dedup_lexemes(&mut final_lexemes, total);
 
         let stopwords = self.config.use_stopwords.then(stopword_view);
@@ -442,6 +449,10 @@ impl IkTokenizer {
 
             let term_opt: Option<Cow<'a, str>> = if needs_term {
                 Some(if !needs_reg_check {
+                    Cow::Borrowed(&text[byte_start..byte_end])
+                } else if matches!(lex.kind, LexemeKind::CnChar | LexemeKind::CnWord) {
+                    // CJK ideographs are identity under regularize —
+                    // skip the per-char comparison and borrow directly.
                     Cow::Borrowed(&text[byte_start..byte_end])
                 } else {
                     let reg_slice = &stream.chars[lex.begin..lex.begin + lex.length];
@@ -486,6 +497,69 @@ impl IkTokenizer {
     }
 }
 
+/// Merged `add_uncovered_chars` + `ensure_isolated_alnum`: emit a singleton
+/// lexeme for every position not covered by any existing lexeme, using ONE
+/// bitmap allocation and ONE pass over the lexeme set instead of two.
+fn add_all_uncovered(lexemes: &mut Vec<Lexeme>, kinds: &[CharKind]) {
+    let n = kinds.len();
+    let mut covered = vec![false; n];
+    for lex in lexemes.iter() {
+        for k in lex.begin..lex.end().min(n) {
+            covered[k] = true;
+        }
+    }
+    for i in 0..n {
+        if covered[i] {
+            continue;
+        }
+        let (kind, emit) = match kinds[i] {
+            CharKind::Chinese => (LexemeKind::CnChar, true),
+            CharKind::English => (LexemeKind::English, true),
+            CharKind::Arabic => (LexemeKind::Arabic, true),
+            CharKind::OtherCjk => (LexemeKind::OtherCjk, true),
+            _ => (LexemeKind::CnChar, false), // dummy, not emitted
+        };
+        if emit {
+            lexemes.push(Lexeme {
+                begin: i,
+                length: 1,
+                kind,
+            });
+        }
+    }
+}
+
+/// In-place quantifier fusion: write-cursor pattern avoids allocating a
+/// second Vec. Fuses adjacent `CnNum` + `Count` → `CnQuan`.
+fn fuse_quantifiers_inplace(lexemes: &mut Vec<Lexeme>) {
+    if lexemes.len() < 2 {
+        return;
+    }
+    let mut write = 0usize;
+    let mut i = 0;
+    while i < lexemes.len() {
+        if i + 1 < lexemes.len()
+            && lexemes[i].kind == LexemeKind::CnNum
+            && lexemes[i + 1].kind == LexemeKind::Count
+            && lexemes[i].end() == lexemes[i + 1].begin
+        {
+            lexemes[write] = Lexeme {
+                begin: lexemes[i].begin,
+                length: lexemes[i].length + lexemes[i + 1].length,
+                kind: LexemeKind::CnQuan,
+            };
+            write += 1;
+            i += 2;
+        } else {
+            lexemes[write] = lexemes[i];
+            write += 1;
+            i += 1;
+        }
+    }
+    lexemes.truncate(write);
+}
+
+#[allow(dead_code)]
 fn ensure_isolated_alnum(lexemes: &mut Vec<Lexeme>, kinds: &[CharKind]) {
     let n = kinds.len();
     let mut covered = vec![false; n];
