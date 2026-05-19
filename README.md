@@ -200,14 +200,21 @@ next)` into one unaligned `u64` load. On the streaming MaxWord and
 slice from `CharStream`, skipping the per-position `text.chars()`
 UTF-8 re-decode entirely.
 
+`CharStream::new` uses a fused `regularize_and_classify` helper with a
+fast path for the **CJK Unified Ideographs** block (U+4E00..=U+9FFF):
+characters in that range are invariant under `regularize` and always
+classify as `Chinese`, so one compare-and-branch replaces the ~6
+conditional range checks that the unfused two-pass version performed
+on every codepoint.
+
 Measured on Apple Silicon (M-series), release build, 1 740-char Chinese
 text × 1 000 iterations, median of 5 runs:
 
 | Workload                          | Throughput            |
 | --------------------------------- | --------------------- |
-| MaxWord (no subset guarantee)     | **~8.7 M chars / s**  |
-| MaxWord (Smart ⊆ MaxWord on)      | **~6.7 M chars / s**  |
-| Smart                             | **~7.1 M chars / s**  |
+| MaxWord (no subset guarantee)     | **~8.6 M chars / s**  |
+| MaxWord (Smart ⊆ MaxWord on)      | **~7.5 M chars / s**  |
+| Smart                             | **~6.9 M chars / s**  |
 
 Most CJK ranges produce **zero allocations** — emitted tokens borrow
 directly from the input via `Cow::Borrowed`.
