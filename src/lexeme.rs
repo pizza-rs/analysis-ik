@@ -1,7 +1,7 @@
 //! Lexeme — the IK term-candidate. A lexeme covers a half-open char range
 //! `[begin, begin+length)` and is tagged with its source ([`LexemeKind`]).
 
-use std::cmp::Ordering;
+use core::cmp::Ordering;
 
 /// Source / type of a lexeme. Mirrors `Lexeme.TYPE_*` constants in Java IK.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

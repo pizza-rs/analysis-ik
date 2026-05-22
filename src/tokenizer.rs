@@ -1,6 +1,6 @@
 //! The public [`IkTokenizer`] implementing `pizza_engine::analysis::Tokenizer`.
 
-use std::borrow::Cow;
+use alloc::borrow::Cow;
 
 use pizza_engine::analysis::{Token, Tokenizer};
 
@@ -631,7 +631,7 @@ fn regularization_is_noop(original: &str, regularized: &[char]) -> bool {
 mod tests {
     use super::*;
     use crate::config::{IkConfig, IkMode};
-    use std::collections::HashSet;
+    use hashbrown::HashSet;
 
     fn token_keys(t: &IkTokenizer, text: &str) -> HashSet<(String, u32, u32)> {
         t.tokenize(text)

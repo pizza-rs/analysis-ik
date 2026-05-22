@@ -4,7 +4,7 @@
 //! bundled compact dictionaries. The internal layout is a small sorted
 //! `Vec<String>` per category; lookups are `O(log N)` and never allocate.
 
-use std::collections::BTreeSet;
+use alloc::collections::BTreeSet;
 
 /// User-supplied dictionary overlay applied on top of the bundled IK dicts.
 ///

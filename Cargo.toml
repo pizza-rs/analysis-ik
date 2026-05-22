@@ -1,8 +1,8 @@
 [package]
-name = "pizza-ik"
+name = "pizza-analysis-ik"
 version = "0.1.0"
 edition = "2021"
-repository = "https://github.com/infinilabs/pizza-ik"
+repository = "https://github.com/infinilabs/analysis-ik"
 categories = ["text-processing"]
 keywords = ["pizza", "ik", "chinese", "tokenizer", "search"]
 authors = ["INFINI Labs Team",]
@@ -10,7 +10,6 @@ license = "Apache-2.0"
 description = "Fast, compact, zero-copy IK-style Chinese analyzer for Pizza, ported from infinilabs/analysis-ik."
 build = "build.rs"
 
-[workspace]
 
 [features]
 default = ["main-dict"]
@@ -22,5 +21,6 @@ main-dict = []
 [dependencies]
 pizza-common = { path = "../../lib/common" }
 pizza-engine = { path = "../../lib/engine" }
+hashbrown = { version = "0.14", default-features = false }
 
 [dev-dependencies]

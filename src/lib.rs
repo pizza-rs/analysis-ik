@@ -9,7 +9,7 @@
 //!
 //! ```no_run
 //! use pizza_engine::analysis::Tokenizer;
-//! use pizza_ik::{IkConfig, IkMode, IkTokenizer};
+//! use pizza_analysis_ik::{IkConfig, IkMode, IkTokenizer};
 //!
 //! let tk = IkTokenizer::new(IkConfig::default().mode(IkMode::Smart));
 //! for tok in tk.tokenize("中华人民共和国成立于1949年") {
@@ -29,7 +29,7 @@
 //! Add user words / stopwords without rebuilding:
 //!
 //! ```
-//! use pizza_ik::{IkTokenizer, Rules};
+//! use pizza_analysis_ik::{IkTokenizer, Rules};
 //!
 //! let mut rules = Rules::new();
 //! rules.add_word("披萨").add_stopword("的");
@@ -41,6 +41,8 @@
 #![deny(rust_2018_idioms)]
 #![warn(missing_debug_implementations)]
 
+#![no_std]
+extern crate alloc;
 mod arbitrator;
 mod char_util;
 mod config;
@@ -55,3 +57,5 @@ pub use dict::{Dict, DictHit, DictKind};
 pub use lexeme::{Lexeme, LexemeKind};
 pub use rules::Rules;
 pub use tokenizer::{IkTokenizer, TokenRange};
+pub mod register;
+pub use register::register_all;
