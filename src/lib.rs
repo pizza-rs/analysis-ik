@@ -38,10 +38,10 @@
 //! # let _ = tk;
 //! ```
 
+#![cfg_attr(not(feature = "std"), no_std)]
 #![deny(rust_2018_idioms)]
 #![warn(missing_debug_implementations)]
 
-#![no_std]
 extern crate alloc;
 mod arbitrator;
 mod char_util;

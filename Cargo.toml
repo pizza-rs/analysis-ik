@@ -7,7 +7,7 @@ categories = ["text-processing"]
 keywords = ["pizza", "ik", "chinese", "tokenizer", "search"]
 authors = ["INFINI Labs Team",]
 license = "Apache-2.0"
-description = "Fast, compact, zero-copy IK-style Chinese analyzer for Pizza, ported from infinilabs/analysis-ik."
+description = "IK Chinese segmentation plugin for INFINI Pizza"
 build = "build.rs"
 
 
@@ -17,10 +17,11 @@ default = ["main-dict"]
 # Disable to ship a minimal binary that only relies on user-supplied
 # extension words.
 main-dict = []
+std = ["pizza-engine/std"]
 
 [dependencies]
 pizza-common = { path = "../../lib/common" }
-pizza-engine = { path = "../../lib/engine" }
+pizza-engine = { path = "../../lib/engine", default-features = false }
 hashbrown = { version = "0.14", default-features = false }
 
 [dev-dependencies]
