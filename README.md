@@ -11,7 +11,7 @@
 
 ---
 
-A from-scratch Rust port of the [`infinilabs/analysis-ik`](https://github.com/infinilabs/analysis-ik)
+A from-scratch Rust port of the [`pizza-rs/analysis-ik`](https://github.com/pizza-rs/analysis-ik)
 Java plugin. Designed for **zero-copy tokenization, compact static dictionaries,
 and low CPU / memory overhead**, with first-class support for runtime extension
 via [`Rules`].

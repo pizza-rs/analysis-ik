@@ -1,6 +1,6 @@
 //! Build-time codegen for the bundled IK dictionaries.
 //!
-//! The Java reference implementation (`infinilabs/analysis-ik`) loads four
+//! The Java reference implementation (`pizza-rs/analysis-ik`) loads four
 //! plain-text dictionaries at runtime into nested HashMap-backed trie nodes
 //! (`DictSegment`). We do that work once at build time and emit a compact
 //! static representation that the runtime can borrow from:

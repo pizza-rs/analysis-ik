@@ -1,6 +1,6 @@
 //! # pizza-ik
 //!
-//! A from-scratch Rust port of the [analysis-ik](https://github.com/infinilabs/analysis-ik)
+//! A from-scratch Rust port of the [analysis-ik](https://github.com/pizza-rs/analysis-ik)
 //! Java plugin. The runtime is zero-copy, allocation-light, and the bundled
 //! dictionaries are compiled in via `build.rs` as compact binary blobs (no
 //! filesystem access at runtime, no startup overhead).

@@ -2,7 +2,7 @@
 name = "pizza-analysis-ik"
 version = "0.1.0"
 edition = "2021"
-repository = "https://github.com/infinilabs/analysis-ik"
+repository = "https://github.com/pizza-rs/analysis-ik"
 categories = ["text-processing"]
 keywords = ["pizza", "ik", "chinese", "tokenizer", "search"]
 authors = ["INFINI Labs Team",]
