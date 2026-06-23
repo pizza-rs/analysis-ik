@@ -11,7 +11,14 @@
 //!   where `B` is the number of distinct first characters (≈ 5K for
 //!   `main.dic`).
 
+#[cfg(feature = "embed")]
 include!(concat!(env!("OUT_DIR"), "/generated.rs"));
+
+#[cfg(all(not(feature = "embed"), not(feature = "std")))]
+compile_error!(
+    "pizza-analysis-ik requires either the `embed` feature (compile-time \
+     dictionaries) or the `std` feature (runtime dictionary loading)."
+);
 
 /// Source of a hit returned from [`Dict::longest_or_all`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -158,6 +165,7 @@ fn partition_point_in_bucket(view: &DictView<'_>, lo: u32, len: usize, key: &[u8
 }
 
 /// Read-only handle for the bundled `MAIN_*` dictionary.
+#[cfg(feature = "embed")]
 #[inline]
 pub(crate) fn main_view() -> DictView<'static> {
     DictView {
@@ -167,6 +175,13 @@ pub(crate) fn main_view() -> DictView<'static> {
         offsets_bin: MAIN_OFFSETS_BIN,
         count: MAIN_TERM_COUNT,
     }
+}
+
+/// Read-only handle for the main dictionary, built once at runtime.
+#[cfg(not(feature = "embed"))]
+#[inline]
+pub(crate) fn main_view() -> DictView<'static> {
+    rt::dicts().main.view()
 }
 
 // -----------------------------------------------------------------------------
@@ -391,6 +406,7 @@ impl MainTrie {
     }
 }
 
+#[cfg(feature = "embed")]
 #[inline]
 pub(crate) fn main_trie() -> MainTrie {
     MainTrie {
@@ -403,7 +419,14 @@ pub(crate) fn main_trie() -> MainTrie {
     }
 }
 
+#[cfg(not(feature = "embed"))]
+#[inline]
+pub(crate) fn main_trie() -> MainTrie {
+    rt::dicts().trie
+}
+
 /// Read-only handle for the bundled `QUANTIFIER_*` dictionary.
+#[cfg(feature = "embed")]
 #[inline]
 pub(crate) fn quantifier_view() -> DictView<'static> {
     DictView {
@@ -415,7 +438,15 @@ pub(crate) fn quantifier_view() -> DictView<'static> {
     }
 }
 
+/// Read-only handle for the quantifier dictionary, built once at runtime.
+#[cfg(not(feature = "embed"))]
+#[inline]
+pub(crate) fn quantifier_view() -> DictView<'static> {
+    rt::dicts().quantifier.view()
+}
+
 /// Read-only handle for the bundled `STOPWORD_*` dictionary.
+#[cfg(feature = "embed")]
 #[inline]
 pub(crate) fn stopword_view() -> DictView<'static> {
     DictView {
@@ -427,6 +458,13 @@ pub(crate) fn stopword_view() -> DictView<'static> {
     }
 }
 
+/// Read-only handle for the stopword dictionary, built once at runtime.
+#[cfg(not(feature = "embed"))]
+#[inline]
+pub(crate) fn stopword_view() -> DictView<'static> {
+    rt::dicts().stopword.view()
+}
+
 /// Public read-only API for the bundled dictionaries. All operations are
 /// `O(log N)` and never allocate.
 pub struct Dict;
@@ -435,22 +473,22 @@ impl Dict {
     /// Total number of terms in the bundled main dictionary (0 if the
     /// `main-dict` feature is disabled).
     pub fn main_size() -> usize {
-        MAIN_TERM_COUNT
+        main_view().count
     }
 
     /// Total number of terms in the bundled quantifier dictionary.
     pub fn quantifier_size() -> usize {
-        QUANTIFIER_TERM_COUNT
+        quantifier_view().count
     }
 
     /// Total number of terms in the bundled stopword dictionary.
     pub fn stopword_size() -> usize {
-        STOPWORD_TERM_COUNT
+        stopword_view().count
     }
 
     /// The longest term character count across the bundled dictionaries.
     pub fn max_term_chars() -> usize {
-        MAX_TERM_CHARS
+        max_term_chars_impl()
     }
 
     /// Returns true if `word` is in the bundled main dictionary.
@@ -466,6 +504,240 @@ impl Dict {
     /// Returns true if `word` is in the bundled stopword dictionary.
     pub fn is_stopword(word: &str) -> bool {
         contains_in(&stopword_view(), word)
+    }
+}
+
+#[cfg(feature = "embed")]
+#[inline]
+fn max_term_chars_impl() -> usize {
+    MAX_TERM_CHARS
+}
+
+#[cfg(not(feature = "embed"))]
+#[inline]
+fn max_term_chars_impl() -> usize {
+    rt::dicts().max_chars
+}
+
+// -----------------------------------------------------------------------------
+// Runtime dictionary construction (no-embed builds)
+// -----------------------------------------------------------------------------
+//
+// When the `embed` feature is disabled the dictionaries are not baked at build
+// time. Instead they are read **once** on first use from the external
+// `config/analysis/ik/{main,quantifier,stopword}.dic` (when a dictionary
+// directory is configured) or the embedded raw text, and the exact same flat
+// blob + CSR-trie layout the build script produces is reconstructed, leaked to
+// `'static`, and cached. The per-character segmentation hot path is therefore
+// byte-for-byte identical to the embedded build — only construction moves from
+// compile time to a one-off startup parse.
+
+#[cfg(not(feature = "embed"))]
+mod rt {
+    use alloc::borrow::Cow;
+    use alloc::boxed::Box;
+    use alloc::collections::BTreeMap;
+    use alloc::string::String;
+    use alloc::vec;
+    use alloc::vec::Vec;
+    use std::sync::OnceLock;
+
+    use super::{DictView, MainTrie};
+
+    /// Owned, leaked flat-dictionary blobs (same layout as `build.rs` emits).
+    pub(super) struct Flat {
+        fc: &'static [u32],
+        bucket_start: &'static [u32],
+        data: &'static [u8],
+        offsets_bin: &'static [u8],
+        count: usize,
+    }
+
+    impl Flat {
+        #[inline]
+        pub(super) fn view(&self) -> DictView<'static> {
+            DictView {
+                fc: self.fc,
+                bucket_start: self.bucket_start,
+                data: self.data,
+                offsets_bin: self.offsets_bin,
+                count: self.count,
+            }
+        }
+    }
+
+    pub(super) struct Dicts {
+        pub main: Flat,
+        pub quantifier: Flat,
+        pub stopword: Flat,
+        pub trie: MainTrie,
+        pub max_chars: usize,
+    }
+
+    pub(super) fn dicts() -> &'static Dicts {
+        static C: OnceLock<Dicts> = OnceLock::new();
+        C.get_or_init(build)
+    }
+
+    #[cfg(all(feature = "main-dict", feature = "embed-fallback"))]
+    const EMBEDDED_MAIN: &str = include_str!("../data/main.dic");
+    #[cfg(not(all(feature = "main-dict", feature = "embed-fallback")))]
+    const EMBEDDED_MAIN: &str = "";
+    #[cfg(feature = "embed-fallback")]
+    const EMBEDDED_QUANTIFIER: &str = include_str!("../data/quantifier.dic");
+    #[cfg(not(feature = "embed-fallback"))]
+    const EMBEDDED_QUANTIFIER: &str = "";
+    #[cfg(feature = "embed-fallback")]
+    const EMBEDDED_STOPWORD: &str = include_str!("../data/stopword.dic");
+    #[cfg(not(feature = "embed-fallback"))]
+    const EMBEDDED_STOPWORD: &str = "";
+
+    fn load(file: &str, embedded: &'static str) -> Cow<'static, str> {
+        #[cfg(feature = "std")]
+        {
+            pizza_engine::analysis::dict::load_str("ik", file, Some(embedded))
+                .unwrap_or(Cow::Borrowed(embedded))
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            let _ = file;
+            Cow::Borrowed(embedded)
+        }
+    }
+
+    /// Parse a `.dic`: one term per line, BOM/`#`/blank-tolerant, sorted+deduped.
+    fn read_dict(text: &str) -> Vec<String> {
+        let text = text.strip_prefix('\u{feff}').unwrap_or(text);
+        let mut words: Vec<String> = text
+            .lines()
+            .map(|l| l.trim_end_matches('\r').trim())
+            .filter(|l| !l.is_empty() && !l.starts_with('#'))
+            .map(String::from)
+            .collect();
+        words.sort();
+        words.dedup();
+        words
+    }
+
+    /// Build the flat sorted-term blobs + first-char bucket index.
+    fn build_flat(words: &[String]) -> Flat {
+        let total: usize = words.iter().map(|w| w.len()).sum();
+        let mut data: Vec<u8> = Vec::with_capacity(total);
+        let mut offsets_bin: Vec<u8> = Vec::with_capacity((words.len() + 1) * 4);
+        offsets_bin.extend_from_slice(&0u32.to_le_bytes());
+        for w in words {
+            data.extend_from_slice(w.as_bytes());
+            offsets_bin.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        }
+        let mut first_chars: BTreeMap<u32, usize> = BTreeMap::new();
+        for (i, w) in words.iter().enumerate() {
+            if let Some(c) = w.chars().next() {
+                first_chars.entry(c as u32).or_insert(i);
+            }
+        }
+        let fc: Vec<u32> = first_chars.keys().copied().collect();
+        let mut bucket_start: Vec<u32> = fc.iter().map(|c| first_chars[c] as u32).collect();
+        bucket_start.push(words.len() as u32);
+        Flat {
+            fc: Box::leak(fc.into_boxed_slice()),
+            bucket_start: Box::leak(bucket_start.into_boxed_slice()),
+            data: Box::leak(data.into_boxed_slice()),
+            offsets_bin: Box::leak(offsets_bin.into_boxed_slice()),
+            count: words.len(),
+        }
+    }
+
+    /// Build the packed char-level prefix trie (CSR), mirroring `emit_trie`.
+    fn build_trie(words: &[String]) -> MainTrie {
+        let mut children: Vec<BTreeMap<u32, u32>> = vec![BTreeMap::new()];
+        let mut terminal: Vec<bool> = vec![false];
+        for w in words {
+            let mut node: u32 = 0;
+            for c in w.chars() {
+                let key = c as u32;
+                let nid = match children[node as usize].get(&key).copied() {
+                    Some(n) => n,
+                    None => {
+                        let new_id = children.len() as u32;
+                        children.push(BTreeMap::new());
+                        terminal.push(false);
+                        children[node as usize].insert(key, new_id);
+                        new_id
+                    }
+                };
+                node = nid;
+            }
+            terminal[node as usize] = true;
+        }
+
+        let n_nodes = children.len();
+        let mut nodes_bin: Vec<u8> = Vec::with_capacity((n_nodes + 1) * 4);
+        let mut edge_char_bin: Vec<u8> = Vec::new();
+        let mut edge_next_bin: Vec<u8> = Vec::new();
+        let mut cursor: u32 = 0;
+        for i in 0..n_nodes {
+            let mut entry = cursor;
+            if terminal[i] {
+                entry |= 0x8000_0000;
+            }
+            nodes_bin.extend_from_slice(&entry.to_le_bytes());
+            for (&c, &child) in children[i].iter() {
+                edge_char_bin.extend_from_slice(&c.to_le_bytes());
+                edge_next_bin.extend_from_slice(&child.to_le_bytes());
+                cursor += 1;
+            }
+        }
+        nodes_bin.extend_from_slice(&cursor.to_le_bytes());
+
+        let (root_min, root_max, root_index_bin): (u32, u32, Vec<u8>) = {
+            let root = &children[0];
+            if root.is_empty() {
+                (0, 0, Vec::new())
+            } else {
+                let min_c = *root.keys().next().unwrap();
+                let max_c = *root.keys().next_back().unwrap();
+                let span = (max_c - min_c + 1) as usize;
+                let mut table: Vec<u32> = vec![u32::MAX; span];
+                for (&c, &child_node) in root.iter() {
+                    table[(c - min_c) as usize] = child_node;
+                }
+                let mut bin: Vec<u8> = Vec::with_capacity(span * 4);
+                for v in table {
+                    bin.extend_from_slice(&v.to_le_bytes());
+                }
+                (min_c, max_c, bin)
+            }
+        };
+
+        MainTrie {
+            nodes: Box::leak(nodes_bin.into_boxed_slice()),
+            edge_char: Box::leak(edge_char_bin.into_boxed_slice()),
+            edge_next: Box::leak(edge_next_bin.into_boxed_slice()),
+            root_index: Box::leak(root_index_bin.into_boxed_slice()),
+            root_min,
+            root_max,
+        }
+    }
+
+    fn build() -> Dicts {
+        let main_words = read_dict(&load("main.dic", EMBEDDED_MAIN));
+        let quantifier_words = read_dict(&load("quantifier.dic", EMBEDDED_QUANTIFIER));
+        let stopword_words = read_dict(&load("stopword.dic", EMBEDDED_STOPWORD));
+        let max_chars = main_words
+            .iter()
+            .chain(quantifier_words.iter())
+            .chain(stopword_words.iter())
+            .map(|w| w.chars().count())
+            .max()
+            .unwrap_or(0);
+        let trie = build_trie(&main_words);
+        Dicts {
+            main: build_flat(&main_words),
+            quantifier: build_flat(&quantifier_words),
+            stopword: build_flat(&stopword_words),
+            trie,
+            max_chars,
+        }
     }
 }
 

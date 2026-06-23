@@ -12,11 +12,18 @@ build = "build.rs"
 
 
 [features]
-default = ["main-dict"]
+default = ["main-dict", "embed", "embed-fallback"]
+# Embed the raw `*.dic` text as a runtime fallback (used in no-embed builds).
+# Disable for a smaller binary that loads only from config/analysis/ik/.
+embed-fallback = []
 # Bundle the full ~275K-entry `main.dic` (the standard IK main dictionary).
 # Disable to ship a minimal binary that only relies on user-supplied
 # extension words.
 main-dict = []
+# Bake the dictionaries into the binary at build time (fastest, self-contained).
+# Disable to load `*.dic` at runtime from the external `config/analysis/ik/`
+# directory (editable), with the embedded raw text as a fallback.
+embed = []
 std = ["pizza-engine/std"]
 
 [dependencies]

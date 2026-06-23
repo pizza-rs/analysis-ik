@@ -21,6 +21,12 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 fn main() {
+    // Only bake the dictionaries when `embed` is enabled. Without it, dict.rs
+    // builds equivalent flat/trie blobs at runtime — see `dict::rt` (no-embed).
+    if env::var_os("CARGO_FEATURE_EMBED").is_none() {
+        return;
+    }
+
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").unwrap());
     let manifest_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap());
     let data_dir = manifest_dir.join("data");
