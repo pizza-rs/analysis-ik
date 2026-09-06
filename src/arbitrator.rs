@@ -8,7 +8,8 @@
 //! 3. **Average lexeme length** (longer average wins).
 //! 4. **Sum of kind priorities** (higher priority kinds win).
 
-use crate::lexeme::{Lexeme, LexemeKind};
+use crate::lexeme::Lexeme;
+use crate::lexeme::LexemeKind;
 
 /// Pick a non-overlapping subset of lexemes that maximizes IK's smart-mode
 /// scoring. `lexemes` may be in any order; the result is sorted by `begin`.
@@ -196,10 +197,7 @@ pub(crate) fn emit_quantifier_fusions(lexemes: &mut Vec<Lexeme>) {
 
 /// Emit any single CJK char that no other lexeme covers, as a `CnChar`
 /// lexeme. Used in `ik_max_word` mode to ensure full coverage.
-pub(crate) fn add_uncovered_chars(
-    lexemes: &mut Vec<Lexeme>,
-    kinds: &[crate::char_util::CharKind],
-) {
+pub(crate) fn add_uncovered_chars(lexemes: &mut Vec<Lexeme>, kinds: &[crate::char_util::CharKind]) {
     let n = kinds.len();
     let mut covered = vec![false; n];
     for lex in lexemes.iter() {

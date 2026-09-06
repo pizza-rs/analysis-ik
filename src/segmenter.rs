@@ -2,9 +2,14 @@
 //! `org.wltea.analyzer.core.CJKSegmenter`, `LetterSegmenter`, and
 //! `CN_QuantifierSegmenter`.
 
-use crate::char_util::{is_chinese_number, regularize_and_classify, CharKind};
-use crate::dict::{for_each_prefix_in, main_trie, quantifier_view};
-use crate::lexeme::{Lexeme, LexemeKind};
+use crate::char_util::is_chinese_number;
+use crate::char_util::regularize_and_classify;
+use crate::char_util::CharKind;
+use crate::dict::for_each_prefix_in;
+use crate::dict::main_trie;
+use crate::dict::quantifier_view;
+use crate::lexeme::Lexeme;
+use crate::lexeme::LexemeKind;
 use crate::rules::Rules;
 
 /// Pre-computed view of the input: the regularized char sequence and the
@@ -90,9 +95,8 @@ pub(crate) fn cjk_segment(stream: &CharStream<'_>, rules: &Rules, out: &mut Vec<
                 let byte_end = byte_off[start + char_count];
                 // SAFETY: text_bytes is valid UTF-8; byte_off values are
                 // codepoint boundaries.
-                let term = unsafe {
-                    std::str::from_utf8_unchecked(&text_bytes[byte_start..byte_end])
-                };
+                let term =
+                    unsafe { std::str::from_utf8_unchecked(&text_bytes[byte_start..byte_end]) };
                 if rules.is_removed_main(term) {
                     return;
                 }
@@ -113,9 +117,7 @@ pub(crate) fn cjk_segment(stream: &CharStream<'_>, rules: &Rules, out: &mut Vec<
         // `BTreeSet::range` walk) when the user added none — the common
         // case.
         if has_extras {
-            let tail_str = unsafe {
-                std::str::from_utf8_unchecked(&text_bytes[byte_start..])
-            };
+            let tail_str = unsafe { std::str::from_utf8_unchecked(&text_bytes[byte_start..]) };
             rules.for_each_extra_prefix(tail_str, |term| {
                 let lc = utf8_char_count(term.as_bytes());
                 if lc == 0 {
@@ -159,7 +161,8 @@ pub(crate) fn letter_segment(stream: &CharStream<'_>, out: &mut Vec<Lexeme>) {
                 let c = chars[end];
                 if matches!(kinds[end], CharKind::English) {
                     end += 1;
-                } else if ENG_CONNECTORS.contains(&c) && end + 1 < n
+                } else if ENG_CONNECTORS.contains(&c)
+                    && end + 1 < n
                     && matches!(kinds[end + 1], CharKind::English)
                 {
                     end += 2;
@@ -188,7 +191,8 @@ pub(crate) fn letter_segment(stream: &CharStream<'_>, out: &mut Vec<Lexeme>) {
                 let c = chars[end];
                 if matches!(kinds[end], CharKind::Arabic) {
                     end += 1;
-                } else if NUM_CONNECTORS.contains(&c) && end + 1 < n
+                } else if NUM_CONNECTORS.contains(&c)
+                    && end + 1 < n
                     && matches!(kinds[end + 1], CharKind::Arabic)
                 {
                     end += 2;
@@ -307,8 +311,8 @@ pub(crate) fn quantifier_segment(stream: &CharStream<'_>, out: &mut Vec<Lexeme>)
         }
         // We're at a non-number position; only emit quantifier hits if we
         // just came out of a number run, OR if the previous char was a digit.
-        let active = p == number_until
-            || (p > 0 && matches!(stream.kinds[p - 1], CharKind::Arabic));
+        let active =
+            p == number_until || (p > 0 && matches!(stream.kinds[p - 1], CharKind::Arabic));
         if active && matches!(stream.kinds[p], CharKind::Chinese) {
             let byte_start = stream.byte_off[p];
             let tail_bytes = &stream.text.as_bytes()[byte_start..];

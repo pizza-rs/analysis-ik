@@ -2,20 +2,29 @@
 
 use alloc::borrow::Cow;
 
-use pizza_engine::analysis::{Token, Tokenizer};
+use pizza_engine::analysis::Token;
+use pizza_engine::analysis::Tokenizer;
 
-use crate::arbitrator::{
-    add_uncovered_chars, arbitrate, bucket_sort_dedup_lexemes, emit_quantifier_fusions,
-    fuse_quantifiers,
-};
+use crate::arbitrator::add_uncovered_chars;
+use crate::arbitrator::arbitrate;
+use crate::arbitrator::bucket_sort_dedup_lexemes;
+use crate::arbitrator::emit_quantifier_fusions;
+use crate::arbitrator::fuse_quantifiers;
 use crate::char_util::CharKind;
-use crate::config::{IkConfig, IkMode};
-use crate::dict::{main_trie, stopword_view, view_contains, MainTrie};
-use crate::lexeme::{Lexeme, LexemeKind};
+use crate::config::IkConfig;
+use crate::config::IkMode;
+use crate::dict::main_trie;
+use crate::dict::stopword_view;
+use crate::dict::view_contains;
+use crate::dict::MainTrie;
+use crate::lexeme::Lexeme;
+use crate::lexeme::LexemeKind;
 use crate::rules::Rules;
-use crate::segmenter::{
-    cjk_segment, letter_segment, quantifier_segment, utf8_char_count, CharStream,
-};
+use crate::segmenter::cjk_segment;
+use crate::segmenter::letter_segment;
+use crate::segmenter::quantifier_segment;
+use crate::segmenter::utf8_char_count;
+use crate::segmenter::CharStream;
 
 /// The IK tokenizer. Cheap to clone; safe to share across threads (Send + Sync).
 #[derive(Debug, Clone, Default)]
@@ -313,9 +322,8 @@ impl IkTokenizer {
                 if has_extras {
                     // SAFETY: same as above — byte_start is a codepoint
                     // boundary, text_bytes is valid UTF-8.
-                    let tail_str = unsafe {
-                        std::str::from_utf8_unchecked(&text_bytes[byte_start..])
-                    };
+                    let tail_str =
+                        unsafe { std::str::from_utf8_unchecked(&text_bytes[byte_start..]) };
                     self.rules.for_each_extra_prefix(tail_str, |term| {
                         let lc = utf8_char_count(term.as_bytes());
                         if lc == 0 {
@@ -630,7 +638,8 @@ fn regularization_is_noop(original: &str, regularized: &[char]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{IkConfig, IkMode};
+    use crate::config::IkConfig;
+    use crate::config::IkMode;
     use hashbrown::HashSet;
 
     fn token_keys(t: &IkTokenizer, text: &str) -> HashSet<(String, u32, u32)> {

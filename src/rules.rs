@@ -116,11 +116,7 @@ impl Rules {
     /// Iterate every extra word that is a prefix of `text` (`text` already
     /// positioned at the candidate start). Used by the CJK segmenter to mix
     /// extras into its hit set.
-    pub(crate) fn for_each_extra_prefix<'a, F: FnMut(&'a str)>(
-        &'a self,
-        text: &str,
-        mut f: F,
-    ) {
+    pub(crate) fn for_each_extra_prefix<'a, F: FnMut(&'a str)>(&'a self, text: &str, mut f: F) {
         // BTreeSet has range queries we can use to limit comparison.
         let first_char_end = match text.chars().next() {
             Some(c) => c.len_utf8(),
@@ -137,7 +133,10 @@ impl Rules {
                 hi.push('\u{10FFFF}');
             }
         }
-        for w in self.extra_words.range::<str, _>((std::ops::Bound::Included(lo), std::ops::Bound::Excluded(hi.as_str()))) {
+        for w in self.extra_words.range::<str, _>((
+            std::ops::Bound::Included(lo),
+            std::ops::Bound::Excluded(hi.as_str()),
+        )) {
             if text.starts_with(w.as_str()) {
                 f(w.as_str());
             }

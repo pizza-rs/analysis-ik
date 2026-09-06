@@ -1,7 +1,12 @@
 //! Comprehensive tests for pizza-analysis-ik (IK Chinese analyzer).
 
-use pizza_analysis_ik::{IkConfig, IkMode, IkTokenizer, Rules};
-use pizza_engine::analysis::{AnalysisFactory, Token, Tokenizer};
+use pizza_analysis_ik::IkConfig;
+use pizza_analysis_ik::IkMode;
+use pizza_analysis_ik::IkTokenizer;
+use pizza_analysis_ik::Rules;
+use pizza_engine::analysis::AnalysisFactory;
+use pizza_engine::analysis::Token;
+use pizza_engine::analysis::Tokenizer;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Helpers
@@ -306,12 +311,22 @@ fn register_all_does_not_panic() {
 
 #[test]
 fn smart_subset_of_max_word() {
-    let smart = IkTokenizer::new(IkConfig::default().mode(IkMode::Smart).ensure_smart_subset(true));
-    let mw = IkTokenizer::new(IkConfig::default().mode(IkMode::MaxWord).ensure_smart_subset(true));
+    let smart = IkTokenizer::new(
+        IkConfig::default()
+            .mode(IkMode::Smart)
+            .ensure_smart_subset(true),
+    );
+    let mw = IkTokenizer::new(
+        IkConfig::default()
+            .mode(IkMode::MaxWord)
+            .ensure_smart_subset(true),
+    );
 
     let text = "中国人民银行成立";
-    let smart_terms: std::collections::HashSet<String> = terms(&smart.tokenize(text)).into_iter().collect();
-    let mw_terms: std::collections::HashSet<String> = terms(&mw.tokenize(text)).into_iter().collect();
+    let smart_terms: std::collections::HashSet<String> =
+        terms(&smart.tokenize(text)).into_iter().collect();
+    let mw_terms: std::collections::HashSet<String> =
+        terms(&mw.tokenize(text)).into_iter().collect();
 
     for st in &smart_terms {
         assert!(

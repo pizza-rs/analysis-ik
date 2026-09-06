@@ -100,7 +100,10 @@ impl<'a> DictView<'a> {
         if text.is_empty() {
             return;
         }
-        let first = match std::str::from_utf8(text).ok().and_then(|s| s.chars().next()) {
+        let first = match std::str::from_utf8(text)
+            .ok()
+            .and_then(|s| s.chars().next())
+        {
             Some(c) => c,
             None => return,
         };
@@ -542,7 +545,8 @@ mod rt {
     use alloc::vec::Vec;
     use std::sync::OnceLock;
 
-    use super::{DictView, MainTrie};
+    use super::DictView;
+    use super::MainTrie;
 
     /// Owned, leaked flat-dictionary blobs (same layout as `build.rs` emits).
     pub(super) struct Flat {

@@ -18,7 +18,8 @@ use std::collections::BTreeMap;
 use std::env;
 use std::fs;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
 fn main() {
     // Only bake the dictionaries when `embed` is enabled. Without it, dict.rs
@@ -101,12 +102,7 @@ fn read_dict(path: &Path) -> Vec<String> {
     words
 }
 
-fn emit_dict(
-    out_dir: &Path,
-    upper: &str,
-    lower: &str,
-    words: &[String],
-) -> std::io::Result<()> {
+fn emit_dict(out_dir: &Path, upper: &str, lower: &str, words: &[String]) -> std::io::Result<()> {
     let total_bytes: usize = words.iter().map(|w| w.len()).sum();
     let mut data: Vec<u8> = Vec::with_capacity(total_bytes);
     let mut offsets_bin: Vec<u8> = Vec::with_capacity((words.len() + 1) * 4);
@@ -266,10 +262,7 @@ fn emit_trie(out_dir: &Path, upper: &str, words: &[String]) -> std::io::Result<(
          pub const {upper}_TRIE_ROOT_INDEX: &[u8] = include_bytes!(\"main_trie_root_index.bin\");\n\
          pub const {upper}_TRIE_ROOT_MIN: u32 = {};\n\
          pub const {upper}_TRIE_ROOT_MAX: u32 = {};\n\n",
-        n_nodes,
-        cursor,
-        root_min_u32,
-        root_max_u32,
+        n_nodes, cursor, root_min_u32, root_max_u32,
     );
     fs::OpenOptions::new()
         .append(true)

@@ -8,8 +8,10 @@
 //! ## Quick start
 //!
 //! ```no_run
+//! use pizza_analysis_ik::IkConfig;
+//! use pizza_analysis_ik::IkMode;
+//! use pizza_analysis_ik::IkTokenizer;
 //! use pizza_engine::analysis::Tokenizer;
-//! use pizza_analysis_ik::{IkConfig, IkMode, IkTokenizer};
 //!
 //! let tk = IkTokenizer::new(IkConfig::default().mode(IkMode::Smart));
 //! for tok in tk.tokenize("中华人民共和国成立于1949年") {
@@ -29,7 +31,8 @@
 //! Add user words / stopwords without rebuilding:
 //!
 //! ```
-//! use pizza_analysis_ik::{IkTokenizer, Rules};
+//! use pizza_analysis_ik::IkTokenizer;
+//! use pizza_analysis_ik::Rules;
 //!
 //! let mut rules = Rules::new();
 //! rules.add_word("披萨").add_stopword("的");
@@ -52,10 +55,15 @@ mod rules;
 mod segmenter;
 mod tokenizer;
 
-pub use config::{IkConfig, IkMode};
-pub use dict::{Dict, DictHit, DictKind};
-pub use lexeme::{Lexeme, LexemeKind};
+pub use config::IkConfig;
+pub use config::IkMode;
+pub use dict::Dict;
+pub use dict::DictHit;
+pub use dict::DictKind;
+pub use lexeme::Lexeme;
+pub use lexeme::LexemeKind;
 pub use rules::Rules;
-pub use tokenizer::{IkTokenizer, TokenRange};
+pub use tokenizer::IkTokenizer;
+pub use tokenizer::TokenRange;
 pub mod register;
 pub use register::register_all;
