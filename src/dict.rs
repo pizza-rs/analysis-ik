@@ -584,28 +584,37 @@ mod rt {
     }
 
     #[cfg(all(feature = "main-dict", feature = "embed-fallback"))]
-    const EMBEDDED_MAIN: &str = include_str!("../data/main.dic");
+    const EMBEDDED_MAIN: Option<&str> = Some(include_str!("../data/main.dic"));
     #[cfg(not(all(feature = "main-dict", feature = "embed-fallback")))]
-    const EMBEDDED_MAIN: &str = "";
+    const EMBEDDED_MAIN: Option<&str> = None;
     #[cfg(feature = "embed-fallback")]
-    const EMBEDDED_QUANTIFIER: &str = include_str!("../data/quantifier.dic");
+    const EMBEDDED_QUANTIFIER: Option<&str> = Some(include_str!("../data/quantifier.dic"));
     #[cfg(not(feature = "embed-fallback"))]
-    const EMBEDDED_QUANTIFIER: &str = "";
+    const EMBEDDED_QUANTIFIER: Option<&str> = None;
     #[cfg(feature = "embed-fallback")]
-    const EMBEDDED_STOPWORD: &str = include_str!("../data/stopword.dic");
+    const EMBEDDED_STOPWORD: Option<&str> = Some(include_str!("../data/stopword.dic"));
     #[cfg(not(feature = "embed-fallback"))]
-    const EMBEDDED_STOPWORD: &str = "";
+    const EMBEDDED_STOPWORD: Option<&str> = None;
 
-    fn load(file: &str, embedded: &'static str) -> Cow<'static, str> {
+    fn load(file: &str, embedded: Option<&'static str>) -> Cow<'static, str> {
         #[cfg(feature = "std")]
         {
-            pizza_engine::analysis::dict::load_str("ik", file, Some(embedded))
-                .unwrap_or(Cow::Borrowed(embedded))
+            // The shipped pizza build compiles no embedded copy in: the
+            // external dictionary under `<dict_dir>/ik/` is the only source,
+            // so a missing file must fail loudly instead of quietly
+            // producing an empty dictionary (and garbage segmentation).
+            pizza_engine::analysis::dict::load_str("ik", file, embedded).unwrap_or_else(|e| {
+                panic!(
+                    "ik dictionary '{file}' is not available: {e}; stage it under \
+                     config/analysis/ik/ ('make copy-analysis-dicts') or build \
+                     pizza-analysis-ik with the 'embed-fallback' feature"
+                )
+            })
         }
         #[cfg(not(feature = "std"))]
         {
             let _ = file;
-            Cow::Borrowed(embedded)
+            Cow::Borrowed(embedded.unwrap_or(""))
         }
     }
 
