@@ -4,3 +4,6 @@ Cargo.lock
 bin/
 .idea
  pkg/README.md
+
+# PGO profiling leftovers from instrumented builds
+*.profraw
