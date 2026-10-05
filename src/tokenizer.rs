@@ -269,10 +269,17 @@ impl IkTokenizer {
         // Inline-dedup push: a linear scan over a tiny buffer is faster
         // than `sort_unstable_by + dedup` at this size and avoids the
         // per-position sort overhead entirely.
+        // Dedup key is the RANGE (begin + length), not full equality:
+        // distinct kinds at the same range — the forced CnChar singleton
+        // vs the quantifier segmenter's CnNum/Count, a main-dict CnWord
+        // (e.g. 三个) vs the fused CnQuan covering it — all render as the
+        // same term at the same offsets and position, so emitting more
+        // than one produced byte-identical duplicate tokens. First lexeme
+        // pushed for a range wins.
         #[inline(always)]
         fn push_unique(bucket: &mut Vec<Lexeme>, lex: Lexeme) {
             for existing in bucket.iter() {
-                if *existing == lex {
+                if existing.begin == lex.begin && existing.length == lex.length {
                     return;
                 }
             }
@@ -348,12 +355,17 @@ impl IkTokenizer {
                     // Only push the singleton if the trie didn't already
                     // emit a length-1 hit (which is the common case for
                     // chars in the main dict). Avoids a linear scan of
-                    // the bucket.
-                    bucket.push(Lexeme {
-                        begin: p,
-                        length: 1,
-                        kind: LexemeKind::CnChar,
-                    });
+                    // the bucket. Goes through push_unique so a 1-char
+                    // user extra already sitting at this range suppresses
+                    // the singleton instead of duplicating it.
+                    push_unique(
+                        &mut bucket,
+                        Lexeme {
+                            begin: p,
+                            length: 1,
+                            kind: LexemeKind::CnChar,
+                        },
+                    );
                 }
             }
 
@@ -647,6 +659,75 @@ mod tests {
             .into_iter()
             .map(|tok| (tok.term.into_owned(), tok.start_offset, tok.end_offset))
             .collect()
+    }
+
+    /// Regression: MaxWord must not emit the same (term, offsets,
+    /// position) twice. Two former bugs produced exactly that:
+    ///  1. the quantifier segmenter armed itself at position 0 (sentinel
+    ///     `number_until == 0`), so a leading char that happens to be in
+    ///     quantifier.dic (中, 世, …) emitted a spurious `Count` alongside
+    ///     the forced `CnChar` singleton;
+    ///  2. same-range lexemes of different kinds (CnChar singleton vs
+    ///     CnNum/Count, main-dict CnWord 三个 vs fused CnQuan 三个) were
+    ///     both emitted because the bucket dedup compared kind too.
+    #[test]
+    fn max_word_no_duplicate_tokens() {
+        let t = IkTokenizer::new(IkConfig::default().mode(IkMode::MaxWord));
+        let cases = [
+            "中华人民共和国成立了，世界卫生组织发布报告。",
+            "世界卫生组织发布报告",
+            "三个苹果",
+            "我买了三个苹果和五公斤大米",
+            "中国人有三千年的历史",
+        ];
+        for text in cases {
+            let mut seen = HashSet::new();
+            for tok in t.tokenize(text) {
+                let key = (
+                    tok.term.into_owned(),
+                    tok.start_offset,
+                    tok.end_offset,
+                    tok.position,
+                );
+                assert!(
+                    !seen.contains(&key),
+                    "duplicate token {key:?} in MaxWord output for {text:?}"
+                );
+                seen.insert(key);
+            }
+        }
+    }
+
+    /// A leading char that is itself a quantifier.dic entry (中) must NOT
+    /// trigger a Count hit — quantifier matching requires a preceding
+    /// Chinese-numeral run or Arabic digit, matching Java IK.
+    #[test]
+    fn quantifier_not_armed_at_sentence_start() {
+        let t = IkTokenizer::new(IkConfig::default().mode(IkMode::MaxWord));
+        let toks = t.tokenize("中华人民共和国成立了");
+        let zhong: Vec<_> = toks.iter().filter(|tk| tk.term.as_ref() == "中").collect();
+        assert_eq!(zhong.len(), 1, "中 must be emitted exactly once");
+        assert_eq!(zhong[0].start_offset, 0);
+        assert_eq!(zhong[0].end_offset, 3);
+        assert_eq!(zhong[0].position, 0);
+    }
+
+    /// Quantifier tokens after a real number must survive (once each):
+    /// the number, the quantifier char, and the fused CnQuan form.
+    #[test]
+    fn max_word_quantifier_after_number_survives() {
+        let t = IkTokenizer::new(IkConfig::default().mode(IkMode::MaxWord));
+        let toks = t.tokenize("三个苹果");
+        for (want, expected) in [("三", 1), ("个", 1), ("三个", 1), ("苹果", 1)] {
+            let n = toks.iter().filter(|tk| tk.term.as_ref() == want).count();
+            assert_eq!(n, expected, "{want} should appear exactly {expected}×");
+        }
+
+        let toks = t.tokenize("我买了三个苹果和五公斤大米");
+        for (want, expected) in [("五公斤", 1), ("公斤", 1), ("五", 1)] {
+            let n = toks.iter().filter(|tk| tk.term.as_ref() == want).count();
+            assert_eq!(n, expected, "{want} should appear exactly {expected}×");
+        }
     }
 
     /// Invariant: tokens produced by `IkMode::Smart` are always a subset of

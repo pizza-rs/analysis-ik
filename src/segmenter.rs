@@ -297,7 +297,11 @@ pub(crate) fn quantifier_segment(stream: &CharStream<'_>, out: &mut Vec<Lexeme>)
 
     // Quantifier dict hits — fire only where the previous run was a CnNum
     // (Java IK: only emits Count when number context is active).
-    let mut number_until = 0usize; // exclusive end of last number run
+    // `usize::MAX` means "no number run seen yet": with a `0` sentinel,
+    // `p == number_until` was vacuously true at the input start, firing a
+    // spurious Count for any leading char that happens to be in
+    // quantifier.dic (e.g. 中 in 中华人民共和国) with no number in sight.
+    let mut number_until = usize::MAX; // exclusive end of last number run
     let mut p = 0usize;
     while p < n {
         if is_chinese_number(chars[p]) {
